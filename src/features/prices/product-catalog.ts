@@ -1,0 +1,20 @@
+import type { Product } from './types';
+
+// 검색 대상은 화면에 고정된 선택지가 아닌 상품 카탈로그다. 실제 연동 시 이 데이터를 상품 저장소로 교체한다.
+// 사진은 제조사 공식 자료이며, 판매가격은 demo-data의 가상 관측값과 분리해 관리한다.
+export const products: Product[] = [
+  { id: 'milk-1l', name: '서울우유 흰우유', manufacturer: '서울우유', category: '유제품', sizeLabel: '1L', packCount: 1, emoji: '🥛', keywords: ['우유', '흰 우유', '밀크', '1000ml'] },
+  { id: 'ramyeon-5', image: {"uri":"https://www.nongshimshop.com/web/product/medium/202602/c21d28d05a2369f829df20601a00e0cf.jpg","sourceUrl":"https://www.nongshimshop.com/product/detail.html?product_no=2660&cate_no=61&display_group=1","note":"농심 공식몰 사진 · 5개입 포장"}, name: '농심 신라면', manufacturer: '농심', category: '라면', sizeLabel: '120g', packCount: 5, emoji: '🍜', keywords: ['라면', '봉지라면', '신라면5개', '신라면 5입'] },
+  { id: 'water-6', name: '제주삼다수', manufacturer: '제주특별자치도개발공사', category: '생수', sizeLabel: '2L', packCount: 6, emoji: '💧', keywords: ['물', '생수', '삼다수', '2000ml', '6입'] },
+  { id: 'rice-3', name: 'CJ 햇반', manufacturer: 'CJ제일제당', category: '간편식', sizeLabel: '210g', packCount: 3, emoji: '🍚', keywords: ['밥', '즉석밥', '백미', '3입'] },
+  { id: 'coffee-20', name: '맥심 모카골드 마일드', manufacturer: '동서식품', category: '커피', sizeLabel: '12g', packCount: 20, emoji: '☕', keywords: ['커피믹스', '믹스커피', '스틱', '20입'] },
+  { id: 'jin-ramyeon-5', image: {"uri":"https://www.otoki.com/pds/brandGoods/2604/4f4a1b9a6bf94065b70e240b3b1fdbbd.png","sourceUrl":"https://www.otoki.com/product/otoki-brand-04","note":"낱개 대표 사진 · 비교 규격은 120g × 5개"}, name: '오뚜기 진라면 매운맛', manufacturer: '오뚜기', category: '라면', sizeLabel: '120g', packCount: 5, emoji: '🍜', keywords: ['라면', '봉지라면', '진라면5개', '5입'] },
+  { id: 'milk-1_8l', name: '서울우유 흰우유', manufacturer: '서울우유', category: '유제품', sizeLabel: '1.8L', packCount: 1, emoji: '🥛', keywords: ['우유', '흰 우유', '대용량', '1800ml'] },
+  { id: 'ramyeon-1', image: {"uri":"https://image.nongshim.com/non/pro/1734997151278.jpg","sourceUrl":"https://brand.nongshim.com/shinramyun/main/index?searchProdCode=26","note":"제조사 공식 사진 · 낱개 포장"}, name: '농심 신라면', manufacturer: '농심', category: '라면', sizeLabel: '120g', packCount: 1, emoji: '🍜', keywords: ['라면', '봉지라면', '낱개', '신라면1개', '1입'] },
+{"id":"jin-mild-1","name":"오뚜기 진라면 순한맛","manufacturer":"오뚜기","category":"라면","sizeLabel":"120g","packCount":1,"emoji":"🍜","keywords":["진라면","봉지라면","순한라면"],"image":{"uri":"https://www.otoki.com/pds/brandGoods/2604/eba26efcdc7c4a51b8c89450b3e4315f.png","sourceUrl":"https://www.otoki.com/product/otoki-brand-04","note":"제조사 공식 사진 · 낱개 포장"}},
+{"id":"samyang-1","name":"삼양라면","manufacturer":"삼양식품","category":"라면","sizeLabel":"120g","packCount":1,"emoji":"🍜","keywords":["삼양","봉지라면"],"image":{"uri":"https://www.samyangfoods.com/upload/product/20230912/20230912173938561416.jpg","sourceUrl":"https://www.samyangfoods.com/kor/brand/view.do?seq=530","note":"제조사 공식 사진 · 낱개 포장"}},
+{"id":"buldak-1","name":"불닭볶음면","manufacturer":"삼양식품","category":"라면","sizeLabel":"140g","packCount":1,"emoji":"🍜","keywords":["불닭","볶음라면","매운라면"],"image":{"uri":"https://www.samyangfoods.com/upload/product/20260622/20260622144950808477.png","sourceUrl":"https://www.samyangfoods.com/kor/brand/view.do?seq=53","note":"제조사 공식 사진 · 낱개 포장"}},
+{"id":"carbo-buldak-1","name":"까르보불닭볶음면","manufacturer":"삼양식품","category":"라면","sizeLabel":"130g","packCount":1,"emoji":"🍜","keywords":["불닭","까르보","카르보","볶음라면"],"image":{"uri":"https://www.samyangfoods.com/upload/product/20260622/20260622145514434489.png","sourceUrl":"https://www.samyangfoods.com/kor/brand/view.do?seq=387","note":"제조사 공식 사진 · 낱개 포장"}},
+{"id":"paldo-bibim-1","name":"팔도 비빔면","manufacturer":"팔도","category":"라면","sizeLabel":"130g","packCount":1,"emoji":"🍜","keywords":["비빔면","비빔라면"],"image":{"uri":"https://paldofood.co.kr/data/product/190231_234102_noodle-001.png","sourceUrl":"https://paldofood.co.kr/product/noodle/12","note":"제조사 공식 사진 · 낱개 포장"}},
+{"id":"teumsae-1","name":"팔도 틈새라면","manufacturer":"팔도","category":"라면","sizeLabel":"120g","packCount":1,"emoji":"🍜","keywords":["틈새","빨계떡","오리지널","매운라면"],"image":{"uri":"https://paldofood.co.kr/data/product/132442_noodle-038.png","sourceUrl":"https://paldofood.co.kr/product/noodle/179","note":"제조사 공식 사진 · 낱개 포장"}}
+];
