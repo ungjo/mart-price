@@ -10,7 +10,7 @@ const projectRoot = path.resolve(__dirname, '..');
 const tempRoot = realpathSync(tmpdir());
 const buildRoot = mkdtempSync(path.join(tempRoot, 'mart-price-tests-'));
 try {
-  for (const relativeRoot of ['features/prices', 'lib']) {
+  for (const relativeRoot of ['features/prices', 'features/branches', 'lib']) {
     const sourceRoot = path.join(projectRoot, 'src', relativeRoot);
     const outputRoot = path.join(buildRoot, relativeRoot);
     mkdirSync(outputRoot, { recursive: true });
