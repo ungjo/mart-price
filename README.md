@@ -1,7 +1,7 @@
 # 마트프라이스 · 대전 데모
 
 같은 제조사·상품·용량·묶음 수량의 가격을 브랜드와 지점별로 비교하는 Expo / React Native 앱입니다.
-전국 서비스가 목표이며, 첫 구현은 **대전시 가상 데이터**로 동작합니다.
+전국 서비스가 목표이며, 현재 앱은 **Supabase에 저장된 대전시 예시 상품·지점·가격**을 조회합니다. 실행 전 아래 공개 연결 정보 설정이 필요합니다.
 
 ## 구현한 화면
 
@@ -21,7 +21,7 @@
 - 비교 기준 시각: **2026-10-29 12:00, 한국 시간**
 - 지점명·가격·행사는 직접 만든 테스트용 정보입니다. 실제 매장의 존재·영업·재고·판매가격을 의미하지 않습니다.
 - 날짜가 지나도 데모를 재현하도록 기준 시각을 고정했습니다. 실제 수집 데이터를 연결할 때 현재 시각과 가격 유효성 정책으로 교체해야 합니다.
-- 로그인, 실제 가격 수집, 데이터베이스, 위치 권한, 지도, 앱 스토어 배포는 아직 구현하지 않았습니다.
+- Supabase의 상품 검색·지점별 가격 비교·가격 상세 조회를 연결했습니다. 로그인, 실제 마트 가격 수집, 위치 권한, 지도, 앱 스토어 배포는 아직 구현하지 않았습니다.
 
 ## 가격 비교 규칙
 
@@ -57,20 +57,28 @@ npm.cmd test
 
 - `typecheck`: TypeScript 타입 검사
 - `lint`: Expo ESLint 규칙 검사
-- `test`: 가격 비교·검색·행사·수량·시간대 규칙의 자동 테스트 17개
-- 테스트 실행기는 설치된 TypeScript로 순수 계산 코드만 임시 폴더에 변환하고 Node 내장 테스트를 실행한 뒤 임시 결과를 정리합니다. 추가 패키지는 필요하지 않습니다.
+- `test`: 가격 비교·검색·행사·수량·시간대와 Supabase 조회 계층의 자동 테스트 30개
+- 테스트 실행기는 TypeScript 모듈을 임시 폴더에 변환하고 Node 내장 테스트를 실행합니다. 조회 계층에는 mock 클라이언트를 주입하므로 실제 Supabase 키나 DB 변경 없이 검사합니다.
 - 라우트를 새로 추가한 뒤 경로 타입이 오래되었다는 오류가 나면 `npm.cmd start`로 Expo Router의 경로 타입을 재생성한 뒤 타입 검사를 다시 실행합니다. `.expo`는 생성 파일이므로 커밋하지 않습니다.
 - 웹 번들 확인: `npx.cmd expo export --platform web`. 결과물 `dist`는 커밋하지 않습니다.
 - Git Bash에서는 위 명령의 `npm.cmd`를 `npm`, `npx.cmd`를 `npx`로 써도 됩니다.
+
+2026-10-29 원격 연결 검증: 공개 키로 상품 14개·마트 5개·지점 6개·가격 89개를 읽었으며, 브라우저에서 라면 9개 검색 → 제조사 필터 → 신라면 5개입의 5개 마트 비교 → 가격 상세(4,380원)를 확인했습니다. 실제 DB 쓰기 작업은 하지 않았습니다. Android/iOS는 번들 생성만 검증했으며 기기 실행은 별도 확인이 필요합니다.
 
 ## 주요 코드 위치
 
 | 위치 | 역할 |
 | --- | --- |
 | `src/features/prices/types.ts` | 상품 규격, 브랜드, 지점, 가격 관측 타입 |
-| `src/features/prices/product-catalog.ts` | 상품 카탈로그 및 공식 사진 출처 |
+| `src/features/prices/product-catalog.ts` | 테스트와 SQL seed의 기준이 되는 카탈로그. 앱 실행 중 조회에는 사용하지 않음 |
 | `src/features/prices/brand-summary.ts` | 5개 마트별 요약 가격 |
-| `src/features/prices/demo-data.ts` | 대전 예시 데이터와 고정 비교 시각 |
+| `src/features/prices/demo-data.ts` | 자동 테스트용 대전 예시 데이터 |
+| `src/features/prices/scope.ts` | 대전·예시 데이터 조회 범위와 고정 비교 시각 |
+| `src/lib/supabase.ts` | 공개 키 기반 Supabase 클라이언트 |
+| `src/features/prices/repository.ts` | DB 상품·지점·가격 조회, 페이지 이동과 요청 취소 |
+| `src/features/prices/row-mappers.ts` | DB 컬럼을 화면 모델로 변환 |
+| `src/features/prices/database-types.ts` | 초기 SQL 스키마와 일치하는 DB 타입 |
+| `src/hooks/use-remote-resource.ts` | 로딩·재시도·20초 시간 제한·이전 응답 차단 |
 | `src/features/prices/comparison.ts` | 검색, 최신 기록 선택, 비교, 상태 판정, 금액·시각 표시 |
 | `src/app/index.tsx` | 상품 검색 |
 | `src/app/products/[productId].tsx` | 지점별 비교 |
@@ -103,10 +111,10 @@ npm.cmd test
 ## 상품 사진과 실제 데이터 연결
 
 검색 첫 화면에는 상품을 미리 나열하지 않습니다. 검색어를 입력하고 검색 버튼 또는 Enter를 누르면 카탈로그 전체에서 찾고, 결과의 제조사 필터는 검색 결과에 맞춰 만들어집니다.
-현재 카탈로그는 화면 검증용 14개 상품이며 라면 규격 9개(농심·오뚜기·삼양식품·팔도)를 포함합니다. 최종 서비스의 검색 범위를 이 상품들로 제한한다는 뜻이 아닙니다. 실제 전체 상품 검색에는 상품 저장소 또는 조회 API 연동이 필요하며 아직 연결하지 않았습니다.
+초기 SQL은 상품 14개와 라면 9개 규격을 넣습니다. 앱의 목록은 고정 배열이 아니라 Supabase의 `is_demo = true` 상품을 읽습니다. DB에 새 예시 상품을 추가하면 다시 검색했을 때 나타납니다. 실제 마트 전체 상품·현재 판매가격은 해당 마트 데이터 수집 연동 이후 제공할 수 있습니다.
 
 라면 사진은 제조사 공식 페이지의 HTTPS 이미지를 표시합니다. 인터넷 연결이나 원본 주소 변경으로 사진이 로드되지 않으면 안내 문구를 보여줍니다.
-대표 낱개 사진을 묶음 상품에 사용하는 경우 비교 규격을 따로 명시합니다. 이미지 주소·출처·포장 설명은 `product-catalog.ts`에 함께 기록합니다.
+대표 낱개 사진을 묶음 상품에 사용하는 경우 비교 규격을 따로 명시합니다. 앱은 DB의 `image_url`, `image_source_url`, `image_note`를 사용합니다. `product-catalog.ts`는 초기 SQL과 테스트의 기준 자료입니다.
 사진은 상품 식별용이며 가격은 별도 예시 데이터입니다.
 
 - shin: [공식 제품 페이지](https://brand.nongshim.com/shinramyun/main/index?searchProdCode=26)
@@ -132,7 +140,7 @@ npm.cmd test
 
 ## Supabase를 사용하는 순서
 
-아래 내용은 다음 개발 단계의 설계와 사용 안내입니다. 현재 Supabase 패키지 설치·프로젝트 생성·테이블 생성·앱 연결은 하지 않았습니다.
+테이블 생성·예시 데이터 입력·결과 확인 SQL을 `supabase/` 폴더에 준비했고 앱의 DB 조회도 구현했습니다. SQL을 실행해 11개 검사를 통과했다면 3번 공개 연결 정보 설정부터 진행합니다.
 
 ### 이 앱에서 맡길 역할
 
@@ -164,53 +172,79 @@ Supabase는 상품·마트·지점·가격 기록을 저장하고 앱이 조회�
 호스팅 프로젝트로 시작할 때 PC에 PostgreSQL이나 Docker를 설치할 필요는 없습니다. 별도의 로컬 Supabase 환경은 나중에 필요할 때 구성합니다.
 공식 안내: [Expo React Native 시작하기](https://supabase.com/docs/guides/getting-started/quickstarts/expo-react-native)
 
-### 2. 테이블과 읽기 권한 구성하기
+### 2. SQL Editor에서 테이블과 예시 데이터 만들기
 
-다음 네 테이블부터 설계하고, 실제 생성 SQL은 다음 연결 작업에서 마이그레이션 파일로 관리합니다.
+프로젝트를 이미 만들었다면 여기서 시작합니다. 별도의 프로그램 설치나 터미널 명령은 필요하지 않습니다.
 
-| 예정 테이블 | 저장할 내용 |
-| --- | --- |
-| `brands` | 비교할 마트 5개 |
-| `branches` | 마트 ID, 지점명, 시·구·동 |
-| `products` | 상품명, 제조사, 품목, 용량, 묶음 수량, 바코드, 사진 URL·출처, 검색어 |
-| `price_observations` | 상품·마트·지점 ID, 금액, 온라인/매장 구분, 일반/회원/카드/묶음 조건, 결제·수령 수량, 확인 시각, 행사 기간, 출처, 예시 여부 |
+1. [Supabase 대시보드](https://supabase.com/dashboard)에서 만든 프로젝트를 엽니다.
+2. 왼쪽 **SQL Editor**를 클릭하고 **New query** 또는 **+**로 빈 쿼리를 만듭니다. 실행 역할은 기본 관리자 `postgres`를 사용합니다.
+3. VS Code에서 [테이블 생성 SQL](supabase/migrations/20261029000100_create_price_catalog.sql)을 열고 **파일 전체를 복사**해 붙여넣은 뒤 **Run**을 누릅니다. 이 단계는 최초 한 번만 실행합니다.
+4. 성공하면 새 쿼리를 열어 [예시 데이터 SQL](supabase/seed.sql) 전체를 붙여넣고 **Run**을 누릅니다.
+5. 새 쿼리에서 [결과 확인 SQL](supabase/verify.sql) 전체를 실행합니다. 최초 입력 직후에는 11개 검사 행의 `passed`가 모두 `true`여야 합니다.
+6. 왼쪽 **Table Editor**에서 `public` 스키마를 선택하고 아래 네 테이블과 데이터를 확인합니다. 새 테이블이 보이지 않으면 새로고침합니다.
 
-- 용량·묶음 수가 다른 상품은 별도 ID로 저장합니다.
-- 실제 API가 온라인 가격만 제공하면 온라인으로 저장합니다. 연결되지 않은 오프라인 지점 가격을 만들어 넣지 않습니다.
-- 예시와 실제 관측값은 `is_demo` 같은 표시로 구분하며, 실제 가격 순위에 섞이지 않게 합니다.
-- 앱 이용자에게 공개할 카탈로그·가격은 읽기만 허용하고, 등록·수정·삭제는 관리자 또는 수집 서버에서 처리합니다.
-- 테이블 권한과 RLS(행 단위 접근 규칙)를 함께 설정합니다. 앱 공개 키로 읽기는 되고 가격 수정은 거부되는지 확인합니다.
+| 테이블 | 저장할 내용 | 최초 입력 건수 |
+| --- | --- | ---: |
+| `brands` | 이마트·홈플러스·롯데마트·이마트에브리데이·홈플러스 익스프레스 | 5 |
+| `branches` | 마트 ID, 지점명, 대전광역시·구·동, 예시 여부 | 6 |
+| `products` | 상품명, 제조사, 품목, 용량, 묶음 수, 사진 URL·출처, 검색어 | 14 |
+| `price_observations` | 상품·마트·지점, 가격, 할인 조건, 수량, 확인 시각·행사 기간, 출처 | 89 |
 
-공식 안내: [Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security)
+**실행 시 알아둘 점**
 
-### 3. 기존 앱을 DB 조회로 바꾸기
+- 각 파일을 부분 선택하지 말고 전체 실행합니다. 중간 오류가 발생하면 해당 파일의 입력은 모두 취소됩니다. 같은 연결에서 `current transaction is aborted`가 보이면 `rollback;`을 먼저 실행하고 오류 원인을 확인합니다.
+- 테이블 생성 SQL은 최초 실행용입니다. `already exists`가 나오면 테이블을 삭제하지 말고 기존 생성 여부를 확인합니다. 이미 성공했다면 예시 데이터 단계로 진행합니다.
+- 예시 데이터 SQL은 여러 번 실행해도 동일 ID를 중복 입력하거나 기존 행을 덮어쓰지 않습니다. 기존 실제 데이터와 예시 ID가 겹치면 입력을 중단합니다. 수동으로 수정한 예시를 초기화하는 용도로 쓰지 않습니다.
+- 예시 지점·상품·가격은 `is_demo = true`로 표시합니다. 지점·가격·행사는 가상이며, 가격 89건 중 12건은 미확인(`NULL`)입니다. 마트 브랜드는 실제 브랜드 이름을 사용하는 공통 기준 정보입니다.
+- 사진이 있는 상품은 9개입니다. 사진 URL·원문 출처는 상품 테이블에, 가격 출처는 가격 테이블에 별도 보관합니다. 확인되지 않은 바코드는 `NULL`로 둡니다.
+- 예시 검증 기준 시각은 **2026-10-29 12:00 한국 시간**입니다. 행사 날짜를 현재 날짜로 자동 갱신하지 않습니다.
+- 모든 테이블에 RLS와 읽기 권한을 설정합니다. 로그인 전후 앱 사용자는 공개 데이터를 조회만 할 수 있고, 입력·수정·삭제는 SQL Editor의 관리자나 수집 서버가 담당합니다. 검사 SQL은 실제로 `anon` 역할로 전환하여 읽기를 확인한 뒤 원래 역할로 복구합니다.
+- 이 테이블의 행은 앱 사용자에게 공개되는 구조입니다. API 키·인증 헤더·개인 정보는 넣지 않습니다.
 
-현재 앱의 `searchProducts`와 가격 조회는 로컬 TypeScript 배열을 읽습니다. 환경변수만 등록해도 DB 조회로 바뀌는 것은 아닙니다.
-실제 연결 작업에서는 다음 순서로 진행합니다.
+**가격 저장 규칙**
 
-1. 14개 예시 상품, 5개 브랜드, 6개 지점, 예시 가격을 DB에 넣습니다.
-2. 기존 Expo 앱 안에 Supabase 클라이언트를 추가합니다. 프로젝트를 다시 만들지 않습니다.
-3. 상품 검색과 상품 상세·가격 조회 함수를 DB를 읽는 비동기 함수로 바꾸고, 로딩·오류·결과 없음 처리를 연결합니다.
-4. 기존 비교 규칙과 테스트를 유지하면서 동일 규격·조건·기간을 지키는지 확인합니다.
-5. DB에 새 예시 상품을 추가한 뒤 앱 재빌드 없이 검색 결과에 나타나는지 확인합니다.
+- 용량·묶음 수가 다르면 별도 상품 ID로 저장합니다. 한 묶음의 낱개 수(`pack_count`)와 행사 수령 묶음 수(`receive_quantity`)를 구분합니다.
+- 미확인 금액은 `pay_amount = NULL`로 저장합니다. 일반/회원/카드/묶음 및 온라인/매장 가격을 각각 구분합니다.
+- 온라인 가격은 `channel = 'online'`으로 저장하고, 실제 지점이 확인되지 않으면 `branch_id = NULL`을 사용합니다. 매장 가격에는 지점이 반드시 필요합니다.
+- 실제 가격을 넣을 때는 새 상품·실제 지점을 등록하고 `is_demo = false`를 사용합니다. 실제/예시 가격을 같은 비교에 섞지 않습니다.
+- 관측이 추가되면 기존 가격을 UPDATE하지 않고 새 ID와 `observed_at`으로 INSERT합니다. 상품·지점별 최신 관측을 선택한 **다음** 기간·금액·수량을 검사합니다. 최신 값이 미확인/종료 상태여도 과거 가격으로 되돌아가지 않습니다.
+- 1+1에서 실제 결제액과 수령 수량을 각각 저장하고, 가격 관측만으로 재고를 판단하지 않습니다.
 
-연결 개발 시 설치할 명령(이번 작업에서는 실행하지 않음):
+파일은 SQL Editor에서 수동 실행하도록 작성했습니다. Supabase CLI 초기화나 원격 migration 기록 등록은 아직 하지 않았으므로, 나중에 CLI를 도입할 때 이미 실행한 스키마의 이력을 맞춘 후 사용합니다.
 
-```powershell
-npx.cmd expo install @supabase/supabase-js react-native-url-polyfill expo-sqlite
-```
+공식 안내: [테이블과 SQL Editor](https://supabase.com/docs/guides/database/tables), [Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security)
 
-프로젝트 루트의 `.env.local`에 넣을 공개 연결 정보 예시:
+### 3. 앱의 Supabase 연결 정보 설정하기
+
+1. Supabase 프로젝트의 **Connect** 또는 **Settings → API Keys**에서 Project URL과 **Publishable key**(`sb_publishable_...`)를 확인합니다.
+2. 프로젝트 루트의 [.env.example](.env.example)을 `.env.local`로 복사하고 자리표시자를 해당 프로젝트 값으로 바꿉니다. 이미 `.env.local`이 있으면 덮어쓰지 말고 두 값만 편집합니다.
 
 ```dotenv
 EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_YOUR_KEY
 ```
 
-위 값은 자리표시자입니다. 이 프로젝트는 `.env*.local`을 Git에서 제외하도록 이미 설정되어 있습니다.
-Publishable key는 앱에 포함되는 공개 키이며, 데이터 접근 범위는 테이블 권한과 RLS로 제한합니다.
-Secret key(`sb_secret_...`), 구형 `service_role` 키, 마트 인증키는 앱·`EXPO_PUBLIC_*` 환경변수·Git에 넣지 않고 서버 측 비밀 설정에서만 사용합니다.
-공식 안내: [API 키 구분](https://supabase.com/docs/guides/api/api-keys), [Edge Functions 비밀 설정](https://supabase.com/docs/guides/functions/secrets)
+3. 실행 중인 Expo 터미널에서 `Ctrl + C`로 서버를 종료한 뒤 아래 명령을 실행합니다. 새 의존성·환경변수를 반영하도록 브라우저도 새로고침합니다.
+
+```powershell
+cd C:\juj\AI_automatize\Price_comparison\workspace\mart-price
+npx.cmd expo start --clear --port 8082
+```
+
+4. 앱에서 `라면`을 검색하고 상품 → 지점별 비교 → 가격 상세 순서로 확인합니다. 초기 seed 그대로라면 라면 9개와 마트 5개 요약이 표시됩니다.
+
+- 설치된 연결 패키지는 `@supabase/supabase-js`, `react-native-url-polyfill`입니다. 현재는 공개 데이터 조회만 사용하므로 로그인 세션 저장과 SQLite는 추가하지 않았습니다.
+- `.env.local`은 Git에서 제외되어 있습니다. Publishable key는 앱에 포함되는 공개 키이며 RLS와 DB 권한으로 조회 범위를 제한합니다. Secret/service_role 키와 DB 비밀번호는 앱 설정에 사용하지 않습니다.
+- 설정이 없으면 “데이터 연결 설정이 필요해요.”가 표시됩니다. 실패 시 로컬 예시 데이터로 대체하지 않습니다. 연결 오류는 결과 없음과 구분해 다시 시도 버튼을 제공합니다.
+- 화면 복귀, 같은 검색어로 재검색, 비교·상세 화면의 “가격 다시 불러오기”, 목록을 아래로 당기기에서 재조회합니다. 이전 요청은 취소하며 20초 이상 응답이 없으면 재시도 안내를 표시합니다.
+- 현재 범위는 `is_demo = true`, 지점 지역은 `대전광역시`입니다. 비교 기준은 초기 seed와 같은 **2026-10-29 12:00 한국 시간**입니다. 실제 가격 모드 전환과 현재 시각 정책은 별도 구현 대상입니다.
+- 온라인 가격은 지점이 `NULL`이어도 온라인 항목에 표시합니다. 일반 매장 최저가에는 포함하지 않습니다.
+- 현재 검색은 소규모 예시 카탈로그를 DB에서 페이지별로 읽고 기존 한글·규격 검색 규칙을 적용합니다. 서버의 행 반환 제한으로 1,000번째 이후 상품이 누락되지 않게 처리했습니다. 전국 규모의 실제 카탈로그를 도입할 때는 서버 검색·검색 결과 페이지 처리가 필요합니다.
+- 앱 조회는 SELECT만 사용합니다. 상품·가격 추가 및 수정은 관리자가 Table Editor 또는 SQL Editor에서 수행합니다.
+
+**DB 변경 반영 확인:** Table Editor에서 새 테스트 상품을 `is_demo = true`로 등록하고 고유한 상품명으로 검색합니다. 이미 검색한 상품을 수정했다면 같은 검색어로 다시 검색합니다. 상품 ID에 연결된 예시 가격이 없어도 상품은 검색되며 비교 화면에는 가격 미확인이 표시됩니다. 실제 상품은 현재 예시 화면에서 제외됩니다.
+
+공식 안내: [Supabase와 Expo](https://supabase.com/docs/guides/getting-started/quickstarts/expo-react-native), [Expo 환경변수](https://docs.expo.dev/guides/environment-variables/), [API 키 구분](https://supabase.com/docs/guides/api/api-keys)
 
 ### 4. 마트 API는 준비된 후 연결하기
 
@@ -218,7 +252,7 @@ Secret key(`sb_secret_...`), 구형 `service_role` 키, 마트 인증키는 앱�
 앱은 저장된 최신 확인 가격을 조회하고 확인 시각·할인 조건을 함께 표시합니다.
 마트 API가 준비되기 전까지는 예시 데이터로 이 구조를 먼저 검증하는 순서가 적합합니다.
 
-## 이번 변경을 순서대로 커밋하기
+## 초기 화면 구현 변경을 순서대로 커밋하기
 
 아래 명령은 **Git Bash** 기준입니다. 변경 내용을 직접 확인한 뒤 순서대로 실행하면 됩니다.
 데이터 → 계산 규칙 → 연결된 세 화면 → 문서 순서로 나눕니다. 서로 연결된 화면은 한 커밋으로 묶어 중간에 이동이 끊기지 않게 합니다.
@@ -245,3 +279,29 @@ git push origin main
 
 기존에 다른 변경을 스테이징했다면 각 커밋 전에 `git diff --cached --stat`으로 포함 파일을 확인하세요.
 `package.json`은 검사 명령을 포함하므로 두 번째 커밋에 포함합니다. 이번에는 의존성을 추가하지 않아 `package-lock.json` 변경이 없습니다.
+
+## Supabase SQL 추가 커밋
+
+이전 화면 구현 커밋을 완료했다면 이번 SQL과 실행 안내는 다음처럼 함께 커밋합니다. 커밋과 push는 직접 실행합니다.
+
+```bash
+cd /c/juj/AI_automatize/Price_comparison/workspace/mart-price
+git add -- supabase README.md
+git diff --cached --stat
+git commit -m "feat: Supabase 상품·지점·가격 테이블과 예시 데이터 추가"
+```
+
+## Supabase 앱 연결 커밋
+
+앞 단계 SQL을 아직 커밋하지 않았다면 먼저 `supabase/`만 커밋한 뒤 앱 연결 코드를 묶습니다. 실제 연결 값이 있는 `.env.local`은 스테이징하지 않습니다.
+
+```bash
+cd /c/juj/AI_automatize/Price_comparison/workspace/mart-price
+# SQL이 아직 커밋되지 않은 경우에만 실행
+git add -- supabase
+git commit -m "feat: Supabase 상품·지점·가격 테이블과 예시 데이터 추가"
+
+git add -- .env.example package.json package-lock.json src scripts README.md
+git diff --cached --stat
+git commit -m "feat: Supabase 상품 검색과 지점별 가격 조회 연결"
+```
