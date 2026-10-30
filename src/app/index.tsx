@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { FlatList, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { DemoNotice, EmptyState, Page, ProductArt, RemoteFeedback, palette, s } from '@/components/prices/ui';
+import { BranchSelectionLink } from '@/components/branches/selection-controls';
 import { searchCatalog } from '@/features/prices/repository';
 import { useRemoteResource } from '@/hooks/use-remote-resource';
 
@@ -49,6 +50,7 @@ export default function SearchScreen() {
         ItemSeparatorComponent={() => <View style={s.separator} />}
         ListHeaderComponent={
           <View style={styles.intro}>
+            <BranchSelectionLink />
             <View>
               <Text style={styles.kicker}>상품을 찾고, 마트 가격을 비교하세요</Text>
               <Text accessibilityRole="header" style={styles.headline}>무엇을 찾으세요?</Text>
@@ -95,7 +97,7 @@ export default function SearchScreen() {
                     ))}
                   </ScrollView>
                 ) : null}
-                <Text style={s.small}>상품을 선택하면 5개 마트의 가격을 확인할 수 있어요.</Text>
+                <Text style={s.small}>상품을 선택하면 선택한 지점의 가격을 비교할 수 있어요.</Text>
               </View>
             ) : null}
           </View>

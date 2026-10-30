@@ -2,6 +2,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { SelectionRestoreFeedback } from '@/components/branches/selection-controls';
+import { selectBranches } from '@/features/branches/selection';
+import { useBranchSelection } from '@/providers/branch-selection-provider';
 import { offerKindLabels, offerStatusLabels } from '@/components/prices/offer-card';
 import { Badge, DemoNotice, EmptyState, Page, ProductHero, ReloadButton, RemoteFeedback, SectionTitle, palette, s } from '@/components/prices/ui';
 import { buildRegularComparisons, formatDateTime, formatWon, getEffectiveUnitPrice, getOfferStatus } from '@/features/prices/comparison';
@@ -14,9 +17,11 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 
 export default function PriceDetailScreen() {
   const { offerId } = useLocalSearchParams<{ offerId: string }>();
+  const { selection, ready } = useBranchSelection();
   const id = typeof offerId === 'string' ? offerId : '';
   const load = useCallback((signal: AbortSignal) => fetchPriceDetail(id, signal), [id]);
   const resource = useRemoteResource('offer:' + id, load);
+  if (!ready) return <Page title="가격 상세" backTo="/"><SelectionRestoreFeedback /></Page>;
   if (resource.loading || resource.error) {
     return <Page title="가격 상세" backTo="/"><RemoteFeedback
       loading={resource.loading} error={resource.error} onRetry={resource.reload} /></Page>;
@@ -34,7 +39,9 @@ export default function PriceDetailScreen() {
   const effective = getEffectiveUnitPrice(offer);
   const compareHref = { pathname: '/products/[productId]' as const, params: { productId: product.id } };
   // 오래된 가격 주소로 들어와도 실제 비교에 쓰는 최신 기록과 포함 여부가 일치해야 한다.
-  const included = buildRegularComparisons(product.id, branches, offers, asOf).some((row) => row.offer?.id === offer.id && row.amount !== null);
+  const selectedBranches = selectBranches(branches, selection);
+  const branchSelected = selectedBranches.some((item) => item.id === offer.branchId);
+  const included = buildRegularComparisons(product.id, selectedBranches, offers, asOf).some((row) => row.offer?.id === offer.id && row.amount !== null);
 
   return (
     <Page title="가격 상세" backTo={compareHref}>
@@ -63,7 +70,7 @@ export default function PriceDetailScreen() {
           <SectionTitle title="가격 적용 조건" />
           <View style={[s.card, styles.sectionCard]}>
             <Text style={styles.condition}>{offer.condition}</Text>
-            <Text style={s.small}>{included ? '조건 없는 매장 일반가로 최저가 비교에 포함됩니다.' : '이 가격은 매장 일반가 최저가 비교에서 제외됩니다.'}</Text>
+            <Text style={s.small}>{included ? '선택한 지점의 조건 없는 매장 일반가로 최저가 비교에 포함됩니다.' : offer.channel === 'offline' && !branchSelected ? '현재 선택하지 않은 지점이므로 최저가 비교에서 제외됩니다.' : '이 가격은 매장 일반가 최저가 비교에서 제외됩니다.'}</Text>
             <DetailRow label="행사 시작" value={offer.startsAt ? formatDateTime(offer.startsAt) : '별도 행사 기간 없음'} />
             <DetailRow label="행사 종료" value={offer.endsAt ? formatDateTime(offer.endsAt) : '종료일 정보 없음'} />
           </View>

@@ -2,6 +2,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { BranchSelectionLink, SelectionRestoreFeedback } from '@/components/branches/selection-controls';
+import { getMissingBranchIds, selectBranches } from '@/features/branches/selection';
+import { useBranchSelection } from '@/providers/branch-selection-provider';
 import { BrandPriceSummary } from '@/components/prices/brand-price-summary';
 import { OfferCard } from '@/components/prices/offer-card';
 import { Badge, DemoNotice, EmptyState, Page, ProductHero, ReloadButton, RemoteFeedback, SectionTitle, palette, s } from '@/components/prices/ui';
@@ -13,10 +16,12 @@ import type { BrandId } from '@/features/prices/types';
 
 export default function ComparisonScreen() {
   const { productId } = useLocalSearchParams<{ productId: string }>();
+  const { selection, ready } = useBranchSelection();
   const [brandId, setBrandId] = useState<BrandId | undefined>();
   const id = typeof productId === 'string' ? productId : '';
   const load = useCallback((signal: AbortSignal) => fetchProductComparison(id, signal), [id]);
   const resource = useRemoteResource('product:' + id, load);
+  if (!ready) return <Page title="지점별 가격 비교" backTo="/"><SelectionRestoreFeedback /></Page>;
   if (resource.loading || resource.error) {
     return <Page title="지점별 가격 비교" backTo="/"><RemoteFeedback
       loading={resource.loading} error={resource.error} onRetry={resource.reload} /></Page>;
@@ -30,14 +35,18 @@ export default function ComparisonScreen() {
   const { product, brands, branches, offers, asOf } = resource.data;
   const getBrand = (id: BrandId) => brands.find((brand) => brand.id === id)!;
   const getBranch = (id: string | null) => branches.find((branch) => branch.id === id);
-  const allRows = buildRegularComparisons(product.id, branches, offers, asOf);
-  const rows = buildRegularComparisons(product.id, branches, offers, asOf, brandId);
+  // 선택 범위를 먼저 좁힌 다음 최저가를 다시 계산해야 제외한 지점의 최저가 표시가 남지 않는다.
+  const selectedBranches = selectBranches(branches, selection);
+  const selectedIds = new Set(selectedBranches.map((branch) => branch.id));
+  const missingCount = getMissingBranchIds(branches, selection).length;
+  const allRows = buildRegularComparisons(product.id, selectedBranches, offers, asOf);
+  const rows = buildRegularComparisons(product.id, selectedBranches, offers, asOf, brandId);
   const knownRows = rows.filter((row) => row.amount !== null);
   const lowest = knownRows[0]?.amount ?? null;
   const highest = knownRows.at(-1)?.amount ?? null;
   const selectedOffers = offers.filter((offer) => !brandId || offer.brandId === brandId);
   // 조건부 할인과 온라인가는 일반 매장가 순위 밖에 둔다. 싼 숫자만 섞으면 구매 조건을 오해할 수 있다.
-  const conditionalOffers = selectedOffers.filter((offer) => offer.channel === 'offline' && offer.kind !== 'regular');
+  const conditionalOffers = selectedOffers.filter((offer) => offer.channel === 'offline' && offer.kind !== 'regular' && offer.branchId !== null && selectedIds.has(offer.branchId));
   const onlineOffers = selectedOffers.filter((offer) => offer.channel === 'online');
 
   return (
@@ -45,18 +54,20 @@ export default function ComparisonScreen() {
       <ScrollView contentContainerStyle={s.content}
         refreshControl={<RefreshControl refreshing={resource.loading} onRefresh={resource.reload} />}>
         <ReloadButton onPress={resource.reload} />
+        <BranchSelectionLink count={selectedBranches.length} />
+        {missingCount > 0 ? <Text style={s.small}>저장된 지점 중 {missingCount}개를 현재 조회할 수 없어 비교에서 제외했습니다.</Text> : null}
         <ProductHero product={product} />
         <BrandPriceSummary summaries={buildBrandSummaries(brands, allRows)} />
         <View style={styles.summary}>
           <View style={s.wrap}><Badge>일반 매장가</Badge><Text style={styles.summaryLabel}>선택한 지점 중 최저가</Text></View>
-          <Text style={styles.lowest}>{lowest === null ? '확인된 가격 없음' : formatWon(lowest)}</Text>
+          <Text style={styles.lowest}>{rows.length === 0 ? '선택한 지점 없음' : lowest === null ? '확인된 가격 없음' : formatWon(lowest)}</Text>
           <Text style={styles.summaryNote}>{knownRows.length}개 지점 가격 확인 · 동일 상품 {product.packCount}개입 기준</Text>
           {lowest !== null && highest !== null && highest > lowest ? (
             <Text style={styles.saving}>지점에 따라 최대 {formatWon(highest - lowest)} 차이</Text>
           ) : null}
         </View>
         <View>
-          <SectionTitle title="브랜드 선택" note="브랜드와 지점을 구분해 비교해요." />
+          <SectionTitle title="브랜드 선택" note="선택한 지점 안에서 브랜드별로 볼 수 있어요." />
           <ScrollView horizontal accessibilityRole="radiogroup" accessibilityLabel="브랜드 선택" showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
             {[{ id: undefined, name: '전체' }, ...brands].map((brand) => (
               <Pressable key={brand.id ?? 'all'} accessibilityRole="radio"
@@ -78,7 +89,7 @@ export default function ComparisonScreen() {
               </View>
             ))}
           </View>
-          {knownRows.length === 0 ? <Text style={styles.unknown}>선택한 브랜드에 비교 가능한 일반 매장가가 없습니다.</Text> : null}
+          {knownRows.length === 0 ? <Text style={styles.unknown}>{rows.length === 0 ? '비교할 지점을 선택해 주세요. 해당 브랜드의 선택 지점이 없을 수도 있습니다.' : '선택한 지점에 비교 가능한 일반 매장가가 없습니다.'}</Text> : null}
         </View>
         <View>
           <SectionTitle title="조건부 혜택" note="회원·카드·묶음 조건을 확인하세요. 일반가 순위와 별개예요." />
@@ -89,7 +100,7 @@ export default function ComparisonScreen() {
           </View>
         </View>
         <View>
-          <SectionTitle title="온라인 가격" note="매장가와 별도 표시 · 배송비를 포함한 총액이 아닙니다." />
+          <SectionTitle title="온라인 가격" note="지점 선택과 별도인 온라인 참고 가격 · 배송비 별도" />
           <View style={styles.list}>
             {onlineOffers.length ? onlineOffers.map((offer) => <OfferCard key={offer.id} offer={offer} brand={getBrand(offer.brandId!)} branch={getBranch(offer.branchId)} asOf={asOf} />) : (
               <Text style={s.body}>등록된 온라인 가격이 없습니다.</Text>

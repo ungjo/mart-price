@@ -6,12 +6,54 @@
 ## 구현한 화면
 
 1. **상품 검색**: 자유 검색어 입력 → 제조사별 사진 결과 → 상품 선택. 검색 전에는 정해진 품목을 나열하지 않습니다.
-2. **지점별 비교**: 5개 마트 가격 요약, 브랜드 필터, 일반 매장가 오름차순, 동률 최저가, 미확인 가격, 조건부 혜택과 온라인가 별도 표시.
+2. **지점별 비교**: 선택한 지점 기준의 5개 마트 가격 요약, 브랜드 필터, 일반 매장가 오름차순, 동률 최저가, 미확인 가격, 조건부 혜택과 온라인가 별도 표시.
 3. **가격 상세**: 결제 금액, 결제·수령 수량, 환산가, 적용 조건, 행사 기간, 가격 확인 시각, 출처와 재고 미확인 표시.
+4. **지역·지점 선택**: 대전시 구별 지점 목록, 여러 지점 선택, 적용 후 기기 저장, 재실행 시 복원.
 
 검색 조건은 주소에 저장합니다. 비교·상세 화면은 Expo Router 스택으로 연결해 돌아갈 때 이전 화면 상태를 유지합니다.
 없는 상품·가격 ID나 잘못된 주소에는 검색 화면으로 돌아가는 안내를 제공합니다.
 초기 템플릿의 `/explore` 주소도 검색 화면으로 연결합니다.
+
+## 지역·지점 선택과 저장
+
+1. 검색 또는 상품 비교 화면의 **대전광역시 · 비교할 지점 → 변경**을 누릅니다.
+2. **대전 전체** 또는 원하는 구를 선택해 지점 목록을 좁힙니다.
+3. 비교할 지점을 여러 개 선택합니다. **전체 지점 선택**, **전체 선택 해제**도 사용할 수 있습니다.
+4. **N개 지점으로 비교 적용**을 누르면 기기에 저장한 뒤 이전 화면으로 돌아갑니다. 적용하지 않고 뒤로 가면 편집 중인 변경은 취소됩니다.
+5. 상품 비교 화면에서 선택한 지점의 일반 매장가·조건부 혜택과 최저가를 확인합니다. 앱을 다시 열어도 저장한 구 필터와 지점 선택을 복원합니다.
+
+**선택과 비교 규칙**
+
+- 처음 실행해 저장값이 없으면 대전 예시 지점 전체를 비교합니다.
+- 구 선택은 지점을 찾는 목록 필터입니다. 다른 구에서 고른 지점도 선택 상태와 비교 대상에 남습니다. 등록된 예시 지점이 없는 구에는 별도 안내를 표시합니다.
+- 지점을 모두 해제하고 적용하면 선택이 없는 상태로 저장합니다. 전체 지점을 자동으로 다시 선택하지 않습니다.
+- 저장된 지점 중 현재 DB에서 조회되지 않는 ID는 비교에서 제외하고 개수를 안내합니다. 선택 화면에서 적용하면 현재 유효한 선택만 다시 저장합니다.
+- 선택한 지점을 먼저 추린 뒤 기존 가격 비교 규칙으로 최저가를 다시 계산합니다. 선택한 지점이 없는 마트와 지점은 있지만 가격이 미확인인 마트를 구분합니다.
+- 매장 조건부 혜택도 선택한 지점에 한정합니다. 온라인 가격은 지점 선택과 별도로 표시하며 매장 최저가 계산에 포함하지 않습니다.
+- 가격 상세 주소로 직접 들어와도 해당 지점이 현재 선택되지 않았다면 최저가 비교에서 제외된다는 안내를 표시합니다.
+- 저장값을 불러오기 전에는 매장 비교를 보류합니다. 저장값이 손상됐거나 읽기에 실패하면 다시 불러오기 또는 **전체 지점으로 초기화**를 선택할 수 있습니다. 저장에 실패하면 기존 비교 범위를 유지하고 다시 시도할 수 있습니다.
+
+**저장 범위**
+
+- `@react-native-async-storage/async-storage`로 이 기기에 선택을 저장합니다. 로그인이나 계정 간 동기화 기능은 없습니다.
+- 웹은 같은 브라우저의 같은 주소(origin: 프로토콜·호스트·포트)에서 유지됩니다. 다른 브라우저·기기·포트에서는 별도 선택이며, 사이트 데이터 삭제 또는 앱 데이터 삭제 시 저장값도 없어집니다.
+- 현재 대상은 대전의 가상 지점 6곳입니다. 실제 주소·거리·위치 권한·지도 기능은 포함하지 않습니다.
+- 기존 Supabase 지점 테이블을 읽으므로 이번 기능을 위해 실행할 추가 SQL은 없습니다. 실제 지점이나 가격을 새로 만들어 저장하지 않습니다.
+
+공식 안내: [Expo AsyncStorage](https://docs.expo.dev/versions/v58.0.0/sdk/async-storage/)
+
+**직접 확인할 시나리오**
+
+| 조작 | 기대 결과 |
+| --- | --- |
+| 전체 해제 후 서로 다른 구의 지점 2곳을 골라 적용 | 두 지점만 매장 비교에 포함되고 최저가가 다시 계산됨 |
+| 구 필터 변경 | 다른 구에서 선택한 지점은 유지됨 |
+| 모든 지점 해제 후 적용 | 선택한 지점 없음 안내, 매장 최저가 없음 |
+| 적용하지 않고 뒤로 이동 | 기존 저장 선택과 비교 범위 유지 |
+| 같은 주소에서 새로고침하거나 앱 다시 열기 | 적용한 구 필터와 지점 선택 복원 |
+| 선택하지 않은 지점의 가격 상세 주소 열기 | 현재 비교에서 제외된 지점임을 안내 |
+
+자동 테스트는 저장값 복원·빈 선택·손상된 값·읽기/쓰기 실패·연속 저장 순서와 선택 범위의 비교 규칙을 확인합니다. Android/iOS 실기기에서 앱 종료 후 재실행하는 확인은 별도로 필요합니다.
 
 ## 예시 데이터 범위
 
@@ -57,7 +99,7 @@ npm.cmd test
 
 - `typecheck`: TypeScript 타입 검사
 - `lint`: Expo ESLint 규칙 검사
-- `test`: 가격 비교·검색·행사·수량·시간대와 Supabase 조회 계층의 자동 테스트 30개
+- `test`: 가격 비교·검색·행사·수량·시간대, Supabase 조회, 지점 선택·저장 계층의 자동 테스트 47개
 - 테스트 실행기는 TypeScript 모듈을 임시 폴더에 변환하고 Node 내장 테스트를 실행합니다. 조회 계층에는 mock 클라이언트를 주입하므로 실제 Supabase 키나 DB 변경 없이 검사합니다.
 - 라우트를 새로 추가한 뒤 경로 타입이 오래되었다는 오류가 나면 `npm.cmd start`로 Expo Router의 경로 타입을 재생성한 뒤 타입 검사를 다시 실행합니다. `.expo`는 생성 파일이므로 커밋하지 않습니다.
 - 웹 번들 확인: `npx.cmd expo export --platform web`. 결과물 `dist`는 커밋하지 않습니다.
@@ -80,6 +122,12 @@ npm.cmd test
 | `src/features/prices/database-types.ts` | 초기 SQL 스키마와 일치하는 DB 타입 |
 | `src/hooks/use-remote-resource.ts` | 로딩·재시도·20초 시간 제한·이전 응답 차단 |
 | `src/features/prices/comparison.ts` | 검색, 최신 기록 선택, 비교, 상태 판정, 금액·시각 표시 |
+| `src/features/branches/selection.ts` | 전체·빈 선택 구분, 저장 형식 검증, 유효한 지점 선택 |
+| `src/features/branches/repository.ts` | Supabase의 대전 예시 지점·마트 조회 |
+| `src/features/branches/persistence.ts` | 기기 저장소 읽기·쓰기와 저장 순서 관리 |
+| `src/providers/branch-selection-provider.tsx` | 화면 간 공통 선택, 복원·저장 상태와 재시도 |
+| `src/app/branches.tsx` | 구별 지점 목록과 선택 적용 화면 |
+| `src/components/branches/selection-controls.tsx` | 지점 변경 링크와 저장값 복원 안내 |
 | `src/app/index.tsx` | 상품 검색 |
 | `src/app/products/[productId].tsx` | 지점별 비교 |
 | `src/app/prices/[offerId].tsx` | 가격 상세 |
@@ -254,6 +302,8 @@ npx.cmd expo start --clear --port 8082
 
 ## 초기 화면 구현 변경을 순서대로 커밋하기
 
+아래 초기 화면·Supabase 커밋 안내는 이전 개발 단계의 기록입니다. 이번 지역·지점 선택 기능은 문서 마지막의 **지역·지점 선택 기능을 단계별로 커밋하기**를 따릅니다.
+
 아래 명령은 **Git Bash** 기준입니다. 변경 내용을 직접 확인한 뒤 순서대로 실행하면 됩니다.
 데이터 → 계산 규칙 → 연결된 세 화면 → 문서 순서로 나눕니다. 서로 연결된 화면은 한 커밋으로 묶어 중간에 이동이 끊기지 않게 합니다.
 
@@ -305,3 +355,47 @@ git add -- .env.example package.json package-lock.json src scripts README.md
 git diff --cached --stat
 git commit -m "feat: Supabase 상품 검색과 지점별 가격 조회 연결"
 ```
+
+2026-10-30 검증: 타입·ESLint 검사, 자동 테스트 47개, 웹·Android·iOS 번들 생성을 통과했습니다. 브라우저에서 서로 다른 구의 두 지점 선택과 가격 비교, 지역 필터 복원, 새로고침 후 선택 복원, 전체 해제 후 0개 지점 유지, 지점이 없는 구 안내를 확인했습니다. 390px 너비에서 선택 화면과 하단 적용 버튼 배치도 확인했습니다. Android/iOS 실제 기기에서 종료 후 재실행하는 검증은 아직 하지 않았습니다.
+
+## 지역·지점 선택 기능을 단계별로 커밋하기
+
+아래 명령은 **Git Bash**에서 실행합니다. 앞 단계가 다음 단계의 기반이 되며, 각 단계에 필요한 코드와 테스트를 함께 묶었습니다. 커밋과 push는 직접 실행합니다.
+
+### 1. 대전 지점 조회와 선택 규칙
+
+Supabase 지점 조회, 전체/빈 선택 구분, 저장 형식 검증, 선택 범위 계산과 관련 테스트를 추가합니다.
+
+```bash
+cd /c/juj/AI_automatize/Price_comparison/workspace/mart-price
+git status
+git add -- src/features/branches/selection.ts src/features/branches/repository.ts scripts/branch-selection.test.cjs scripts/branch-repository.test.cjs scripts/test-prices.cjs
+git diff --cached --stat
+git commit -m "feat: 대전 지점 조회와 선택 규칙 추가"
+```
+
+### 2. 선택 내용 저장과 복원
+
+AsyncStorage 의존성, 공통 선택 상태, 앱 시작 시 복원, 저장 실패·재시도 처리와 테스트를 추가합니다. 이 단계에서는 기존 화면이 공통 상태 제공자 안에서 실행됩니다.
+
+```bash
+git add -- package.json package-lock.json src/features/branches/persistence.ts src/providers/branch-selection-provider.tsx src/app/_layout.tsx scripts/branch-persistence.test.cjs
+git diff --cached --stat
+git commit -m "feat: 지점 선택 저장과 앱 재실행 시 복원 구현"
+```
+
+### 3. 선택 화면과 가격 비교 연결
+
+지역·지점 선택 화면, 검색 화면의 변경 링크, 선택 지점 기준의 가격 비교·상세 안내와 사용 문서를 포함합니다. 대괄호가 있는 경로는 Git Bash가 파일 패턴으로 해석하지 않도록 따옴표로 감쌉니다.
+
+```bash
+git add -- src/app/branches.tsx src/app/index.tsx 'src/app/products/[productId].tsx' 'src/app/prices/[offerId].tsx' src/components/branches/selection-controls.tsx src/components/prices/brand-price-summary.tsx README.md
+git diff --cached --stat
+git commit -m "feat: 선택한 지점끼리 가격 비교하는 화면 구현"
+
+git log -3 --oneline
+git status
+git push origin main
+```
+
+실제 연결 정보가 있는 `.env.local`과 Expo가 생성한 `.expo`·`dist`·`node_modules`는 커밋하지 않습니다.

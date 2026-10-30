@@ -9,7 +9,7 @@ export function BrandPriceSummary({ summaries }: { summaries: BrandSummary[] }) 
 
   return (
     <View>
-      <SectionTitle title="5개 마트 가격 한눈에 보기" note="같은 상품·용량·수량의 일반 매장가" />
+      <SectionTitle title="5개 마트 가격 한눈에 보기" note="선택한 지점의 같은 상품·용량·수량 일반 매장가" />
       <View style={[s.card, styles.card]}>
         <Badge>예시 가격</Badge>
         {summaries.map((summary, index) => (
@@ -19,7 +19,7 @@ export function BrandPriceSummary({ summaries }: { summaries: BrandSummary[] }) 
               <View style={s.flex}>
                 <Text style={styles.brand}>{summary.brand.name}</Text>
                 <Text style={s.small}>
-                  {summary.cheapestBranchName ?? '확인된 지점 가격 없음'}
+                  {summary.branchCount === 0 ? '이 브랜드의 선택 지점이 없어요' : summary.cheapestBranchName ?? '선택한 지점의 가격 미확인'}
                 </Text>
                 <Text style={styles.count}>
                   {summary.knownBranchCount}/{summary.branchCount}개 지점 가격 확인
@@ -28,13 +28,13 @@ export function BrandPriceSummary({ summaries }: { summaries: BrandSummary[] }) 
             </View>
             <View style={styles.price}>
               <Text style={[styles.amount, summary.lowestAmount === null && styles.unknown]}>
-                {summary.lowestAmount === null ? '가격 미확인' : formatWon(summary.lowestAmount)}
+                {summary.branchCount === 0 ? '선택 지점 없음' : summary.lowestAmount === null ? '가격 미확인' : formatWon(summary.lowestAmount)}
               </Text>
               {summary.lowestAmount !== null ? <Text style={s.small}>확인된 지점 중 최저</Text> : null}
             </View>
           </View>
         ))}
-        <Text style={styles.scope}>대전 예시 지점 기준 · 브랜드 전체 공통 가격이 아닙니다.</Text>
+        <Text style={styles.scope}>선택한 대전 예시 지점 기준 · 브랜드 전체 공통 가격이 아닙니다.</Text>
       </View>
     </View>
   );
