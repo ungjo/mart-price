@@ -1,9 +1,12 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { offerKindLabels, offerStatusLabels } from '@/components/prices/offer-card';
-import { Badge, DemoNotice, EmptyState, Page, ProductHero, SectionTitle, palette, s } from '@/components/prices/ui';
-import { formatDateTime, formatWon, getBranch, getBrand, getEffectiveUnitPrice, getOffer, getOfferStatus, getProduct, getRegularComparisons } from '@/features/prices/comparison';
+import { Badge, DemoNotice, EmptyState, Page, ProductHero, ReloadButton, RemoteFeedback, SectionTitle, palette, s } from '@/components/prices/ui';
+import { buildRegularComparisons, formatDateTime, formatWon, getEffectiveUnitPrice, getOfferStatus } from '@/features/prices/comparison';
+import { fetchPriceDetail } from '@/features/prices/repository';
+import { useRemoteResource } from '@/hooks/use-remote-resource';
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return <View style={styles.detailRow}><Text style={styles.label}>{label}</Text><Text style={styles.value}>{value}</Text></View>;
@@ -11,25 +14,33 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 
 export default function PriceDetailScreen() {
   const { offerId } = useLocalSearchParams<{ offerId: string }>();
-  // URL의 ID는 외부 입력이다. 없는 가격·상품·지점이면 계산을 진행하지 않고 복구 경로를 제공한다.
-  const offer = getOffer(typeof offerId === 'string' ? offerId : '');
-  const product = offer ? getProduct(offer.productId) : undefined;
-  const branch = offer ? getBranch(offer.branchId) : undefined;
-  if (!offer || !product || !branch) {
+  const id = typeof offerId === 'string' ? offerId : '';
+  const load = useCallback((signal: AbortSignal) => fetchPriceDetail(id, signal), [id]);
+  const resource = useRemoteResource('offer:' + id, load);
+  if (resource.loading || resource.error) {
+    return <Page title="가격 상세" backTo="/"><RemoteFeedback
+      loading={resource.loading} error={resource.error} onRetry={resource.reload} /></Page>;
+  }
+  // 존재하지 않는 ID와 통신 오류를 구분한다. 온라인 지점 NULL은 정상 데이터다.
+  if (!resource.data) {
     return <Page title="가격 상세" backTo="/"><EmptyState title="가격 정보를 찾을 수 없어요"
       description="주소가 잘못되었거나 등록되지 않은 가격입니다." buttonLabel="상품 검색으로"
       onReset={() => router.replace('/')} /></Page>;
   }
-  const brand = getBrand(branch.brandId);
-  const status = getOfferStatus(offer);
+  const { offer, product, brands, branches, offers, asOf } = resource.data;
+  const branch = branches.find((item) => item.id === offer.branchId);
+  const brand = brands.find((item) => item.id === offer.brandId)!;
+  const status = getOfferStatus(offer, asOf);
   const effective = getEffectiveUnitPrice(offer);
   const compareHref = { pathname: '/products/[productId]' as const, params: { productId: product.id } };
   // 오래된 가격 주소로 들어와도 실제 비교에 쓰는 최신 기록과 포함 여부가 일치해야 한다.
-  const included = getRegularComparisons(product.id).some((row) => row.offer?.id === offer.id && row.amount !== null);
+  const included = buildRegularComparisons(product.id, branches, offers, asOf).some((row) => row.offer?.id === offer.id && row.amount !== null);
 
   return (
     <Page title="가격 상세" backTo={compareHref}>
-      <ScrollView contentContainerStyle={s.content}>
+      <ScrollView contentContainerStyle={s.content}
+        refreshControl={<RefreshControl refreshing={resource.loading} onRefresh={resource.reload} />}>
+        <ReloadButton onPress={resource.reload} />
         <ProductHero product={product} />
         <View style={[s.card, styles.priceCard]}>
           <View style={s.wrap}>
@@ -39,7 +50,7 @@ export default function PriceDetailScreen() {
           </View>
           <Text style={s.body}>{status === 'expired' ? '종료된 행사 결제 금액' : status === 'upcoming' ? '예정 행사 결제 금액' : offer.channel === 'online' ? '상품 결제 금액 · 배송비 별도' : '실제 결제해야 할 금액'}</Text>
           <Text style={styles.amount}>{status === 'unknown' || offer.payAmount === null ? '가격 미확인' : formatWon(offer.payAmount)}</Text>
-          <Text style={s.body}>{brand.name} · {branch.name}</Text>
+          <Text style={s.body}>{brand.name} · {branch?.name ?? '온라인몰 · 지점 미지정'}</Text>
           {status === 'expired' || status === 'upcoming' ? <Text style={styles.alert}>예시 기준 시각에 적용할 수 없는 행사입니다.</Text> : null}
           <View style={styles.quantityBox}>
             <DetailRow label="결제 수량" value={`상품 ${offer.payQuantity}개`} />
@@ -61,8 +72,8 @@ export default function PriceDetailScreen() {
           <SectionTitle title="지점 및 확인 정보" />
           <View style={[s.card, styles.sectionCard]}>
             <DetailRow label="브랜드" value={brand.name} />
-            <DetailRow label="지점" value={branch.name} />
-            <DetailRow label="예시 지역" value={`대전광역시 ${branch.district} ${branch.area}`} />
+            <DetailRow label="지점" value={branch?.name ?? '온라인몰 · 지점 미지정'} />
+            <DetailRow label="예시 지역" value={branch ? `${branch.city ?? '대전광역시'} ${branch.district} ${branch.area}` : '특정 매장에 연결되지 않은 온라인 가격'} />
             <DetailRow label="가격 확인 시각" value={`${formatDateTime(offer.observedAt)} (한국 시간)`} />
             <DetailRow label="재고 상태" value="미확인 · 가격 정보와 별개" />
           </View>

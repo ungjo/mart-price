@@ -6,9 +6,17 @@ const buildRoot = process.env.PRICES_TEST_BUILD;
 if (!buildRoot) throw new Error('npm test 또는 node scripts/test-prices.cjs로 실행하세요.');
 const { brands, branches, products, offers, DEMO_AS_OF } = require(path.join(buildRoot, 'demo-data.js'));
 const {
-  buildRegularComparisons, searchProducts, getProduct, getOffer, getOfferStatus,
-  getRegularComparisons, getLowestPrice, getEffectiveUnitPrice, formatWon, formatDateTime,
+  buildRegularComparisons, searchProducts: searchProductList, getOfferStatus,
+  getEffectiveUnitPrice, formatWon, formatDateTime,
 } = require(path.join(buildRoot, 'comparison.js'));
+
+// 예시 배열은 테스트에서만 주입한다. 앱의 실제 조회 모듈이 로컬 예시로 돌아가지 않게 분리한다.
+const searchProducts = (query, category) => searchProductList(products, query, category);
+const getProduct = id => products.find(product => product.id === id);
+const getOffer = id => offers.find(item => item.id === id);
+const getRegularComparisons = (productId, brandId) => getProduct(productId)
+  ? buildRegularComparisons(productId, branches, offers, DEMO_AS_OF, brandId) : [];
+const getLowestPrice = productId => getRegularComparisons(productId).find(row => row.amount !== null)?.amount ?? null;
 
 const base = offers.find((offer) => offer.id === 'milk-1l-emart-dunsan-regular');
 const observedEarlier = '2026-10-28T10:00:00+09:00';
@@ -139,6 +147,20 @@ test('같은 지점의 최신 관측 가격을 선택하고 입력 배열을 변
   const before = JSON.stringify(records);
   assert.equal(buildRegularComparisons('milk-1l', [branches[0]], records)[0].amount, 3200);
   assert.equal(JSON.stringify(records), before);
+});
+
+test('같은 확인 시각의 DB 가격은 저장 시각과 ID로 결정해 응답 순서에 흔들리지 않는다', () => {
+  const olderSaved = offer({ id: 'z-old', createdAt: '2026-10-29T01:00:00Z', payAmount: 1000 });
+  const newerSaved = offer({ id: 'a-new', createdAt: '2026-10-29T02:00:00Z', payAmount: 3200 });
+  const sameTimeLaterId = offer({ ...newerSaved, id: 'z-new', payAmount: null });
+  for (const records of [[olderSaved, newerSaved], [newerSaved, olderSaved]]) {
+    assert.equal(buildRegularComparisons('milk-1l', [branches[0]], records)[0].offer.id, 'a-new');
+  }
+  for (const records of [[newerSaved, sameTimeLaterId], [sameTimeLaterId, newerSaved]]) {
+    const row = buildRegularComparisons('milk-1l', [branches[0]], records)[0];
+    assert.equal(row.offer.id, 'z-new');
+    assert.equal(row.amount, null);
+  }
 });
 
 test('1+1은 결제 금액과 수령 수량을 보존하고 환산가를 별도로 계산한다', () => {

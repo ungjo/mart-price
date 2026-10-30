@@ -1,11 +1,11 @@
 import { Image } from 'expo-image';
 import { type Href, router } from 'expo-router';
 import { type PropsWithChildren, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { formatDateTime } from '@/features/prices/comparison';
-import { DEMO_AS_OF } from '@/features/prices/demo-data';
+import { DEMO_AS_OF } from '@/features/prices/scope';
 import type { Product } from '@/features/prices/types';
 
 export const palette = {
@@ -44,7 +44,7 @@ export function Page({ children, backTo, title }: PropsWithChildren<{ backTo?: H
 export function DemoNotice() {
   return (
     <View style={s.demo}>
-      <Text style={s.demoTitle}>직접 만든 예시 데이터</Text>
+      <Text style={s.demoTitle}>저장된 예시 데이터</Text>
       <Text style={s.small}>지점·가격은 가상이며 실제 판매 정보가 아닙니다.</Text>
       <Text style={s.small}>비교 기준: {formatDateTime(DEMO_AS_OF)} (한국 시간)</Text>
     </View>
@@ -117,6 +117,27 @@ export function EmptyState({ title, description, onReset, buttonLabel = '검색 
       </Pressable> : null}
     </View>
   );
+}
+
+export function RemoteFeedback({ loading, error, onRetry }: {
+  loading: boolean; error: string | null; onRetry: () => void;
+}) {
+  if (loading) return (
+    <View style={s.empty} accessibilityLiveRegion="polite">
+      <ActivityIndicator size="large" color={palette.green} accessibilityLabel="데이터 불러오는 중" />
+      <Text style={s.body}>데이터를 불러오고 있어요.</Text>
+    </View>
+  );
+  if (!error) return null;
+  return <EmptyState title="데이터를 불러오지 못했어요" description={error}
+    buttonLabel="다시 시도" onReset={onRetry} />;
+}
+
+export function ReloadButton({ onPress }: { onPress: () => void }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel="가격 다시 불러오기"
+    onPress={onPress} style={({ pressed }) => [s.chip, pressed && s.pressed]}>
+    <Text style={s.link}>↻ 가격 다시 불러오기</Text>
+  </Pressable>;
 }
 
 export const s = StyleSheet.create({

@@ -2,28 +2,29 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Badge, palette, s } from './ui';
-import { formatDateTime, formatWon, getBranch, getBrand, getEffectiveUnitPrice, getOfferStatus } from '@/features/prices/comparison';
-import type { Offer } from '@/features/prices/types';
+import { formatDateTime, formatWon, getEffectiveUnitPrice, getOfferStatus } from '@/features/prices/comparison';
+import type { Brand, Branch, Offer } from '@/features/prices/types';
 
 export const offerKindLabels = { regular: '일반가', member: '회원가', card: '카드가', bundle: '묶음 행사' };
 export const offerStatusLabels = { available: '가격 확인', unknown: '가격 미확인', expired: '행사 종료', upcoming: '행사 예정' };
 
-export function OfferCard({ offer, isLowest = false }: { offer: Offer; isLowest?: boolean }) {
-  const branch = getBranch(offer.branchId);
-  if (!branch) return null;
-  const brand = getBrand(branch.brandId);
-  const status = getOfferStatus(offer);
+export function OfferCard({ offer, brand, branch, asOf, isLowest = false }: {
+  offer: Offer; brand: Brand; branch?: Branch; asOf: string; isLowest?: boolean;
+}) {
+  // 온라인몰에는 지점 정보가 없을 수 있다. 임의의 매장에 연결하지 않고 별도로 표시한다.
+  const branchName = branch?.name ?? '온라인몰 · 지점 미지정';
+  const status = getOfferStatus(offer, asOf);
   const effective = getEffectiveUnitPrice(offer);
   return (
     <Pressable accessibilityRole="button"
-      accessibilityLabel={`${brand.name} ${branch.name}, ${offer.channel === 'offline' ? '매장' : '온라인'}, ${offerKindLabels[offer.kind]}, ${offerStatusLabels[status]}, ${status !== 'unknown' && offer.payAmount !== null ? formatWon(offer.payAmount) + ' 결제' : '금액 미확인'}, 상품 ${offer.receiveQuantity}개 수령${isLowest ? ', 최저가' : ''}. 가격 상세 보기`}
+      accessibilityLabel={`${brand.name} ${branchName}, ${offer.channel === 'offline' ? '매장' : '온라인'}, ${offerKindLabels[offer.kind]}, ${offerStatusLabels[status]}, ${status !== 'unknown' && offer.payAmount !== null ? formatWon(offer.payAmount) + ' 결제' : '금액 미확인'}, 상품 ${offer.receiveQuantity}개 수령${isLowest ? ', 최저가' : ''}. 가격 상세 보기`}
       onPress={() => router.push({ pathname: '/prices/[offerId]', params: { offerId: offer.id } })}
       style={({ pressed }) => [s.card, styles.card, isLowest && styles.lowest, pressed && s.pressed]}>
       <View style={s.row}>
         <View style={s.flex}>
           <Text style={[styles.brandName, { color: brand.color }]}>{brand.name}</Text>
-          <Text style={styles.branch}>{branch.name}</Text>
-          <Text style={s.small}>대전 {branch.district} · {branch.area}</Text>
+          <Text style={styles.branch}>{branchName}</Text>
+          <Text style={s.small}>{branch ? `${branch.city ?? '대전광역시'} ${branch.district} · ${branch.area}` : '온라인 전용 가격'}</Text>
         </View>
         {isLowest ? <Badge>최저가</Badge> : <Badge warm={offer.kind !== 'regular'}>{offerKindLabels[offer.kind]}</Badge>}
       </View>

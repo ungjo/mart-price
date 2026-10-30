@@ -1,11 +1,11 @@
-import { brands, branches, DEMO_AS_OF, offers, products } from './demo-data';
-import type { Brand, BrandId, Branch, Offer, OfferStatus, RegularComparison } from './types';
+import { DEMO_AS_OF } from './scope';
+import type { BrandId, Branch, Offer, OfferStatus, Product, RegularComparison } from './types';
 
 function normalize(value: string): string {
   return value.normalize('NFKC').toLocaleLowerCase('ko-KR').replace(/\s+/g, '');
 }
 
-export function searchProducts(query: string, category?: string) {
+export function searchProducts(products: readonly Product[], query: string, category?: string) {
   const terms = query.normalize('NFKC').trim().split(/\s+/).map(normalize).filter(Boolean);
   return products.filter((product) => {
     if (category && category !== '전체' && product.category !== category) return false;
@@ -16,28 +16,6 @@ export function searchProducts(query: string, category?: string) {
     // 여러 검색어를 모두 만족하는 정확한 규격을 찾되, 실제 가격 비교는 상품 ID로만 한다.
     return terms.every((term) => searchable.includes(term));
   });
-}
-
-export function getProduct(id: string) {
-  return products.find((product) => product.id === id);
-}
-
-export function getBranch(id: string) {
-  return branches.find((branch) => branch.id === id);
-}
-
-export function getBrand(id: BrandId): Brand {
-  const brand = brands.find((item) => item.id === id);
-  if (!brand) throw new Error(`등록되지 않은 브랜드입니다: ${id}`);
-  return brand;
-}
-
-export function getOffer(id: string) {
-  return offers.find((offer) => offer.id === id);
-}
-
-export function getProductOffers(productId: string): Offer[] {
-  return offers.filter((offer) => offer.productId === productId);
 }
 
 function hasValidAmounts(offer: Offer): boolean {
@@ -81,8 +59,15 @@ export function buildRegularComparisons(
       const candidateTime = Date.parse(candidate.observedAt);
       // 날짜가 손상된 최신 입력을 무시하고 이전 가격을 노출하지 않도록 보수적으로 미확인 처리한다.
       if (!Number.isFinite(previousTime)) return latest;
-      if (!Number.isFinite(candidateTime) || candidateTime >= previousTime) return candidate;
-      return latest;
+      if (!Number.isFinite(candidateTime) || candidateTime > previousTime) return candidate;
+      if (candidateTime < previousTime) return latest;
+      // 같은 확인 시각이면 저장 시각과 ID로 순서를 고정해 DB 페이지/응답 순서에 흔들리지 않게 한다.
+      const previousCreated = Date.parse(latest.createdAt ?? latest.observedAt);
+      const candidateCreated = Date.parse(candidate.createdAt ?? candidate.observedAt);
+      if (Number.isFinite(previousCreated) && Number.isFinite(candidateCreated) && previousCreated !== candidateCreated) {
+        return candidateCreated > previousCreated ? candidate : latest;
+      }
+      return candidate.id.localeCompare(latest.id) >= 0 ? candidate : latest;
     }, null);
     const eligible = offer && offer.payQuantity === 1 && offer.receiveQuantity === 1
       && getOfferStatus(offer, asOf) === 'available';
@@ -99,15 +84,6 @@ export function buildRegularComparisons(
       }
       return left.branch.id.localeCompare(right.branch.id);
     });
-}
-
-export function getRegularComparisons(productId: string, brandId?: BrandId): RegularComparison[] {
-  if (!getProduct(productId)) return [];
-  return buildRegularComparisons(productId, branches, offers, DEMO_AS_OF, brandId);
-}
-
-export function getLowestPrice(productId: string): number | null {
-  return getRegularComparisons(productId).find((row) => row.amount !== null)?.amount ?? null;
 }
 
 /** 환산가는 비교를 돕는 참고값이다. 1+1의 실제 결제액은 payAmount 그대로 표시해야 한다. */

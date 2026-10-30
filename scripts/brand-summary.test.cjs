@@ -4,8 +4,13 @@ const path = require('node:path');
 
 const buildRoot = process.env.PRICES_TEST_BUILD;
 if (!buildRoot) throw new Error('npm test로 실행하세요.');
-const { getBrandSummaries } = require(path.join(buildRoot, 'brand-summary.js'));
-const { brands } = require(path.join(buildRoot, 'demo-data.js'));
+const { buildBrandSummaries } = require(path.join(buildRoot, 'brand-summary.js'));
+const { buildRegularComparisons } = require(path.join(buildRoot, 'comparison.js'));
+const { brands, branches, products, offers, DEMO_AS_OF } = require(path.join(buildRoot, 'demo-data.js'));
+
+// DB에서 받은 목록으로도 같은 규칙을 적용할 수 있도록 예시 조회는 테스트 내부에만 둔다.
+const getBrandSummaries = productId => buildBrandSummaries(brands, products.some(product => product.id === productId)
+  ? buildRegularComparisons(productId, branches, offers, DEMO_AS_OF) : []);
 
 test('마트별 요약에는 가격 미확인 마트를 포함한 다섯 브랜드가 항상 같은 순서로 표시된다', () => {
   const summaries = getBrandSummaries('milk-1l');

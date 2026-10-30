@@ -1,28 +1,37 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { FlatList, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { DemoNotice, EmptyState, Page, ProductArt, palette, s } from '@/components/prices/ui';
-import { searchProducts } from '@/features/prices/comparison';
-import { brands } from '@/features/prices/demo-data';
+import { DemoNotice, EmptyState, Page, ProductArt, RemoteFeedback, palette, s } from '@/components/prices/ui';
+import { searchCatalog } from '@/features/prices/repository';
+import { useRemoteResource } from '@/hooks/use-remote-resource';
 
 export default function SearchScreen() {
   const params = useLocalSearchParams<{ q?: string; maker?: string }>();
   // 첫 화면에서 정해진 상품을 고르게 하지 않는다. 자유 검색어를 입력했을 때만 카탈로그를 조회한다.
   // 검색 조건은 주소에 보존해 가격 상세에서 돌아오거나 새로고침해도 같은 결과를 볼 수 있다.
   const query = typeof params.q === 'string' ? params.q : '';
-  const [draft, setDraft] = useState(query);
+  const [draftState, setDraftState] = useState({ query, value: query });
+  const draft = draftState.query === query ? draftState.value : query;
+  const setDraft = (value: string) => setDraftState({ query, value });
   const hasQuery = query.trim().length > 0;
-  const matchedProducts = hasQuery ? searchProducts(query) : [];
+  const load = useCallback((signal: AbortSignal) => searchCatalog(query, signal), [query]);
+  const resource = useRemoteResource('catalog:' + query, load, hasQuery);
+  const matchedProducts = resource.loading || resource.error ? [] : resource.data ?? [];
+
   const makers = [...new Set(matchedProducts.map((product) => product.manufacturer))];
   const maker = typeof params.maker === 'string' && makers.includes(params.maker) ? params.maker : '';
   const results = maker ? matchedProducts.filter((product) => product.manufacturer === maker) : matchedProducts;
   const resetSearch = () => {
-    setDraft('');
+    setDraftState({ query: '', value: '' });
     router.setParams({ q: '', maker: '' });
   };
   const submitSearch = () => {
-    router.setParams({ q: draft.trim(), maker: '' });
+    const next = draft.trim();
+    setDraftState({ query: next, value: next });
+    router.setParams({ q: next, maker: '' });
+    // 같은 검색어도 다시 조회해 DB에 추가·변경한 상품을 재빌드 없이 반영한다.
+    if (next === query) resource.reload();
     Keyboard.dismiss();
   };
 
@@ -31,6 +40,8 @@ export default function SearchScreen() {
       <FlatList
         data={results}
         numColumns={2}
+        refreshing={resource.loading}
+        onRefresh={hasQuery ? resource.reload : undefined}
         keyExtractor={(product) => product.id}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.content}
@@ -64,12 +75,12 @@ export default function SearchScreen() {
                 <Text style={styles.searchButtonText}>검색</Text>
               </Pressable>
             </View>
-            <Text style={styles.demoLabel}>예시 카탈로그 · 판매가격은 아직 실제 마트와 연동되지 않았습니다.</Text>
+            <Text style={styles.demoLabel}>저장된 예시 상품·가격을 조회합니다. 실제 마트 판매가격이 아닙니다.</Text>
             {hasQuery ? (
               <View style={styles.resultHeader}>
                 <View style={styles.resultsHeading}>
                   <Text accessibilityRole="header" style={s.sectionTitle}>‘{query.trim()}’ 검색 결과</Text>
-                  <Text accessibilityLiveRegion="polite" style={s.small}>{results.length}개 상품</Text>
+                  <Text accessibilityLiveRegion="polite" style={s.small}>{resource.loading ? '조회 중' : resource.error ? '조회 실패' : `${results.length}개 상품`}</Text>
                 </View>
                 {makers.length > 1 ? (
                   <ScrollView horizontal accessibilityRole="radiogroup" accessibilityLabel="제조사 선택"
@@ -106,9 +117,11 @@ export default function SearchScreen() {
             </View>
           </Pressable>
         )}
-        ListEmptyComponent={hasQuery ? (
+        ListEmptyComponent={hasQuery && (resource.loading || resource.error) ? (
+          <RemoteFeedback loading={resource.loading} error={resource.error} onRetry={resource.reload} />
+        ) : hasQuery ? (
           <EmptyState title="일치하는 상품이 없어요"
-            description="현재 예시 카탈로그에 없는 상품입니다. 다른 검색어를 입력해 보세요."
+            description="저장된 예시 상품 중 일치하는 결과가 없습니다. 다른 검색어를 입력해 보세요."
             onReset={resetSearch} buttonLabel="검색어 지우기" />
         ) : (
           <View style={styles.start}>
@@ -125,7 +138,7 @@ export default function SearchScreen() {
         ListFooterComponent={
           <View style={styles.footer}>
             <Text style={s.eyebrow}>비교하는 마트</Text>
-            <Text style={styles.brands}>{brands.map((brand) => brand.name).join(' · ')}</Text>
+            <Text style={styles.brands}>이마트 · 홈플러스 · 롯데마트 · 이마트에브리데이 · 홈플러스 익스프레스</Text>
             <DemoNotice />
           </View>
         }

@@ -1,12 +1,11 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { getBrandSummaries } from '@/features/prices/brand-summary';
+import type { BrandPriceSummary as BrandSummary } from '@/features/prices/brand-summary';
 import { formatWon } from '@/features/prices/comparison';
 
 import { Badge, SectionTitle, palette, s } from './ui';
 
-export function BrandPriceSummary({ productId }: { productId: string }) {
-  const summaries = getBrandSummaries(productId);
+export function BrandPriceSummary({ summaries }: { summaries: BrandSummary[] }) {
 
   return (
     <View>
